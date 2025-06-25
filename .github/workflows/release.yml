@@ -3,7 +3,7 @@ name: Build and Release
 # 여기서 버전을 수정하세요 (예: v1.0.0, v1.0.1, v2.0.0)
 # 빈 문자열이면 릴리스가 생성되지 않습니다
 env:
-  RELEASE_VERSION: "v1.0.0"
+  RELEASE_VERSION: ""
 
 on:
   push:
@@ -75,7 +75,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ needs.check-version.outputs.version }}
-        name: Release ${{ needs.check-version.outputs.version }}
+        name: ${{ needs.check-version.outputs.version }}
         files: |
           HideLegs-${{ needs.check-version.outputs.version }}.zip
           release/HideLegs/HideLegs.dll
