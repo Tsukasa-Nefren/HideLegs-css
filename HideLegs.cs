@@ -6,6 +6,9 @@ using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using System.Drawing;
 using System.Text.Json;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.IO;
 
 namespace HideLegs;
 
@@ -19,7 +22,9 @@ public class HideLegsPlugin : BasePlugin
 
     private readonly Dictionary<int, bool> _playerHideLegsState = new();
     private readonly Dictionary<string, bool> _playerSettings = new();
-    private readonly string _configPath = Path.Combine(Server.GameDirectory, "csgo", "addons", "counterstrikesharp", "configs", "plugins", "HideLegs", "player_settings.json");    public override void Load(bool hotReload)
+    private readonly string _configPath = Path.Combine(Server.GameDirectory, "csgo", "addons", "counterstrikesharp", "configs", "plugins", "HideLegs", "player_settings.json");
+
+    public override void Load(bool hotReload)
     {
         LoadPlayerSettings();
     }
@@ -39,7 +44,6 @@ public class HideLegsPlugin : BasePlugin
         // Load player's saved setting
         bool savedSetting = GetPlayerSetting(player);
         _playerHideLegsState[player.Slot] = savedSetting;
-        
         return HookResult.Continue;
     }
 
@@ -49,8 +53,6 @@ public class HideLegsPlugin : BasePlugin
         var player = @event.Userid;
         if (player == null || !player.IsValid)
             return HookResult.Continue;
-
-        // Clean up player state
         _playerHideLegsState.Remove(player.Slot);
         return HookResult.Continue;
     }
@@ -62,14 +64,11 @@ public class HideLegsPlugin : BasePlugin
     {
         if (player == null || !player.IsValid || player.IsBot)
             return;
-
-        // Check if player is alive and not spectating
         if (!IsPlayerAliveAndNotSpectating(player))
         {
             player.PrintToChat($" \x07[Hide Legs]\x01 You must be alive to use this command.");
             return;
         }
-
         ToggleHideLegs(player);
     }
 
@@ -77,20 +76,13 @@ public class HideLegsPlugin : BasePlugin
     {
         if (!_playerHideLegsState.ContainsKey(player.Slot))
             _playerHideLegsState[player.Slot] = GetPlayerSetting(player);
-
         _playerHideLegsState[player.Slot] = !_playerHideLegsState[player.Slot];
         bool hideLegs = _playerHideLegsState[player.Slot];
-
         UpdatePlayerModelAlpha(player, hideLegs);
-        
-        // Save the setting permanently
         SetPlayerSetting(player, hideLegs);
-
-        // Send feedback message
         string message = hideLegs 
             ? $" \x04[Hide Legs]\x01 Legs are now hidden."
             : $" \x04[Hide Legs]\x01 Legs are now visible.";
-        
         player.PrintToChat(message);
     }
 
@@ -99,26 +91,18 @@ public class HideLegsPlugin : BasePlugin
         var playerPawn = player.PlayerPawn.Value;
         if (playerPawn == null || !playerPawn.IsValid)
             return;
-
-        // Only apply effects if player is alive and not spectating
         if (!IsPlayerAliveAndNotSpectating(player))
             return;
-
         if (hideLegs)
         {
-            // CS2KZ method: Set alpha to 254 to hide legs in first person view only
-            // This makes legs invisible to the player but keeps the body visible to others
             playerPawn.RenderMode = RenderMode_t.kRenderTransAlpha;
-            playerPawn.Render = Color.FromArgb(254, 255, 255, 255); // Alpha 254 instead of 1
+            playerPawn.Render = Color.FromArgb(254, 255, 255, 255);
         }
         else
         {
-            // Restore normal rendering
             playerPawn.RenderMode = RenderMode_t.kRenderNormal;
             playerPawn.Render = Color.FromArgb(255, 255, 255, 255);
         }
-
-        // Send changes to client
         Utilities.SetStateChanged(playerPawn, "CBaseModelEntity", "m_clrRender");
     }
 
@@ -127,13 +111,31 @@ public class HideLegsPlugin : BasePlugin
     {
         var player = @event.Userid;
         if (player == null || !player.IsValid || player.IsBot)
-            return HookResult.Continue;        // Apply existing settings after spawn
-        Server.NextFrame(() =>
+            return HookResult.Continue;
+
+        void ApplyHideLegs()
         {
-            if (_playerHideLegsState.ContainsKey(player.Slot) && _playerHideLegsState[player.Slot])
-            {
+            bool hideLegs = GetPlayerSetting(player);
+            _playerHideLegsState[player.Slot] = hideLegs;
+            if (hideLegs)
                 UpdatePlayerModelAlpha(player, true);
+        }
+
+        // 여러 프레임 + 0.2초 후에도 한 번 더 적용
+        Server.NextFrame(() => {
+            ApplyHideLegs();
+            Server.NextFrame(() => {
+                ApplyHideLegs();
+                Server.NextFrame(ApplyHideLegs);
+            });
+            // 약 0.2초(12프레임) 후에도 한 번 더 적용
+            int delayFrames = 12;
+            void DelayedApply(int count)
+            {
+                if (count <= 0) { ApplyHideLegs(); return; }
+                Server.NextFrame(() => DelayedApply(count - 1));
             }
+            DelayedApply(delayFrames);
         });
 
         return HookResult.Continue;
@@ -141,21 +143,19 @@ public class HideLegsPlugin : BasePlugin
 
     [GameEventHandler]
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
-    {        // Restore hide legs settings for all players at round start
+    {
         Server.NextFrame(() =>
         {
             foreach (var player in Utilities.GetPlayers())
             {
                 if (player == null || !player.IsValid || player.IsBot)
                     continue;
-
                 if (_playerHideLegsState.ContainsKey(player.Slot) && _playerHideLegsState[player.Slot])
                 {
                     UpdatePlayerModelAlpha(player, true);
                 }
             }
         });
-
         return HookResult.Continue;
     }
 
@@ -164,7 +164,6 @@ public class HideLegsPlugin : BasePlugin
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
-            
             if (File.Exists(_configPath))
             {
                 string json = File.ReadAllText(_configPath);
@@ -190,11 +189,7 @@ public class HideLegsPlugin : BasePlugin
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
-            
-            string json = JsonSerializer.Serialize(_playerSettings, new JsonSerializerOptions 
-            { 
-                WriteIndented = true 
-            });
+            string json = JsonSerializer.Serialize(_playerSettings, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_configPath, json);
         }
         catch (Exception ex)
@@ -205,7 +200,6 @@ public class HideLegsPlugin : BasePlugin
 
     private string GetPlayerIdentifier(CCSPlayerController player)
     {
-        // Use SteamID as unique identifier
         return player.SteamID.ToString();
     }
 
@@ -219,30 +213,20 @@ public class HideLegsPlugin : BasePlugin
     {
         string steamId = GetPlayerIdentifier(player);
         _playerSettings[steamId] = hideLegs;
-        
-        // Save immediately to prevent data loss
         Task.Run(SavePlayerSettings);
     }
 
     private bool IsPlayerAliveAndNotSpectating(CCSPlayerController player)
     {
-        // Check if player is valid
         if (player == null || !player.IsValid)
             return false;
-
-        // Check if player pawn exists and is valid
         var playerPawn = player.PlayerPawn.Value;
         if (playerPawn == null || !playerPawn.IsValid)
             return false;
-
-        // Check if player is alive
         if (playerPawn.LifeState != (byte)LifeState_t.LIFE_ALIVE)
             return false;
-
-        // Check if player is not spectating
         if (player.TeamNum == (int)CsTeam.Spectator || player.TeamNum == (int)CsTeam.None)
             return false;
-
         return true;
     }
 }
