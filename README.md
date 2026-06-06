@@ -7,118 +7,93 @@
 
 A CounterStrikeSharp plugin that allows players to hide their legs in first-person view for Counter-Strike 2.
 
-## 🎯 Features
+## Features
 
-- **Toggle leg visibility** in first-person view
-- **Persistent settings** - player preferences are saved and restored
-- **Multiple commands** for easy access (`css_hidelegs`, `css_hideleg`, `css_legs`)
-- **Automatic restoration** after spawn and round start
-- **Safe implementation** - only affects first-person view, other players see you normally
+- Toggle leg visibility in first-person view
+- Persistent per-player settings
+- Command aliases: `css_hidelegs`, `css_hideleg`, `css_legs`
+- Automatic restoration after spawn, round start, and hot reload
+- Uses model alpha `254` so the local first-person legs are hidden while normal visibility is preserved for other players
 
-## 📋 Requirements
+## Requirements
 
-- **Counter-Strike 2** server
-- **CounterStrikeSharp** (minimum API version 276)
-- **.NET 8.0** runtime
+- Counter-Strike 2 server
+- CounterStrikeSharp API 1.0.369 or newer compatible build
+- .NET 10 runtime
 
-## 🚀 Installation
+## Installation
 
-### Option 1: Download from Releases (Recommended)
-1. Go to the [Releases](../../releases) page
-2. Download the latest `HideLegs-vX.X.X.zip` file
-3. Extract the zip file
-4. Place `HideLegs.dll` in your CounterStrikeSharp plugins folder:
-   ```
-   csgo/addons/counterstrikesharp/plugins/HideLegs/
-   ```
-5. Restart your server or use `css_plugins reload`
+1. Download the latest `HideLegs-vX.X.X.zip` from Releases.
+2. Extract the archive into the server `csgo` folder.
+3. Confirm the plugin files are under:
 
-### Option 2: Build from Source
-1. Clone this repository
-2. Follow the [Building from Source](#-building-from-source) instructions below
+```text
+csgo/addons/counterstrikesharp/plugins/HideLegs/
+```
 
-## 🎮 Usage
+4. Restart the server or reload the plugin.
 
-### Commands
+## Commands
 
 - `css_hidelegs` - Toggle hide legs in first person
-- `css_hideleg` - Toggle hide legs in first person  
+- `css_hideleg` - Toggle hide legs in first person
 - `css_legs` - Toggle hide legs in first person
 
-### Requirements
-- You must be **alive** and **not spectating** to use the command
-- Settings are automatically saved per player (using SteamID)
+Players must be alive and not spectating to use the command.
 
-## ⚙️ Configuration
+## Configuration
 
-The plugin automatically creates a configuration file at:
-```
+The plugin automatically creates and manages:
+
+```text
 csgo/addons/counterstrikesharp/configs/plugins/HideLegs/player_settings.json
 ```
 
-This file stores individual player preferences and is automatically managed by the plugin.
+The file stores player preferences by SteamID64.
 
-## 🔧 Building from Source
+## Building
 
-### Prerequisites
-- .NET 8.0 SDK
-- CounterStrikeSharp.API NuGet package
-
-### Build Steps
 ```bash
-git clone <your-repo-url>
-cd HideLegs
 dotnet restore
-dotnet build
+dotnet build --configuration Release
+dotnet publish --configuration Release --output ./publish
 ```
 
-The compiled `HideLegs.dll` will be in `bin/Debug/net8.0/` or `bin/Release/net8.0/`
+The compiled plugin files are emitted under `bin/Release/net10.0/` and `publish/`.
 
-## 📝 How it Works
+## Technical Details
 
-The plugin uses the CS2KZ method by setting the player model's alpha value to 254 (instead of 255) which makes the legs invisible to the player in first-person view while keeping the body visible to other players.
+- Version: 1.1.0
+- Target Framework: .NET 10
+- Minimum CounterStrikeSharp API: 369
+- Package Reference: CounterStrikeSharp.API 1.0.369
 
-### Key Features:
-- **Alpha transparency**: Uses `RenderMode_t.kRenderTransAlpha` with alpha value 254
-- **State management**: Tracks player preferences in memory and saves to JSON
-- **Event handling**: Automatically restores settings on player spawn and round start
-- **Validation**: Ensures players are alive and not spectating before applying effects
+## Version History
 
-## 🤝 Contributing
+### v1.1.0
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- Updated to .NET 10 and CounterStrikeSharp.API 1.0.369
+- Switched player authorization/disconnect tracking to current CSSSharp listeners
+- Made settings saves snapshot-based and race-safe
+- Updated GitHub Actions for the current `master` branch and full publish-folder release packaging
 
-## 📄 License
+### v1.0.1
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **CS2KZ** community for the original leg hiding technique
-- **CounterStrikeSharp** team for the excellent API
-- **Counter-Strike 2** modding community
-
-## 📊 Version History
+- Previous public release
 
 ### v1.0.0
+
 - Initial release
 - Basic leg hiding functionality
 - Persistent player settings
 - Multiple command aliases
 - Automatic state restoration
 
-## 🐛 Issues & Support
+## License
 
-If you encounter any issues or have suggestions, please:
-1. Check the [Issues](../../issues) page
-2. Create a new issue with detailed information
-3. Include server logs if applicable
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
-## 🔗 Related Projects
+## Acknowledgments
 
-- [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp)
-- [CS2KZ](https://github.com/KZGlobalTeam/cs2kz-metamod)
+- CS2KZ community for the original leg hiding technique
+- CounterStrikeSharp team

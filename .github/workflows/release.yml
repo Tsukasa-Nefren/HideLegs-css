@@ -1,84 +1,70 @@
 name: Build and Release
 
-env:
-  RELEASE_VERSION: "v1.0.1"
-
 on:
   push:
-    branches: [ main ]
-    paths:
-      - '.github/workflows/release.yml'
+    branches: [ master ]
   workflow_dispatch:
 
-jobs:
-  check-version:
-    runs-on: ubuntu-latest
-    outputs:
-      should-release: ${{ steps.check.outputs.should-release }}
-      version: ${{ steps.check.outputs.version }}
-    steps:
-    - name: Check if version is set
-      id: check
-      run: |
-        if [ -z "${{ env.RELEASE_VERSION }}" ] || [ "${{ env.RELEASE_VERSION }}" = "" ]; then
-          echo "should-release=false" >> $GITHUB_OUTPUT
-          echo "Version is empty, skipping release"
-        else
-          echo "should-release=true" >> $GITHUB_OUTPUT
-          echo "version=${{ env.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
-          echo "Version set to: ${{ env.RELEASE_VERSION }}"
-        fi
+env:
+  RELEASE_VERSION: "v1.1.0"
 
-  build:
-    needs: check-version
-    if: needs.check-version.outputs.should-release == 'true'
+jobs:
+  build_and_release:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
-        
-    - name: Restore dependencies
-      run: dotnet restore
-      
-    - name: Build Release
-      run: dotnet build --configuration Release --no-restore
-      
-    - name: Publish
-      run: dotnet publish --configuration Release --no-build --output ./publish
-      
-    - name: Create release directory
-      run: |
-        mkdir -p release/HideLegs
-        cp publish/HideLegs.dll release/HideLegs/
-        cp README.md release/
-        cp LICENSE release/
-        
-    - name: Archive release files
-      run: |
-        cd release
-        zip -r ../HideLegs-${{ needs.check-version.outputs.version }}.zip .
-        
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: HideLegs-${{ needs.check-version.outputs.version }}
-        path: release/
-        
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ needs.check-version.outputs.version }}
-        name: ${{ needs.check-version.outputs.version }}
-        files: |
-          HideLegs-${{ needs.check-version.outputs.version }}.zip
-          release/HideLegs/HideLegs.dll
-        generate_release_notes: true
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "refs/tags/${{ env.RELEASE_VERSION }}" >/dev/null 2>&1; then
+            echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "A release for ${{ env.RELEASE_VERSION }} already exists. Skipping release steps."
+          else
+            echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "Creating release ${{ env.RELEASE_VERSION }}."
+          fi
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Release
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Publish
+        if: steps.check_tag.outputs.TAG_EXISTS == 'false'
+        run: dotnet publish --configuration Release --no-build --output ./publish
+
+      - name: Create release directory
+        if: steps.check_tag.outputs.TAG_EXISTS == 'false'
+        run: |
+          mkdir -p release/addons/counterstrikesharp/plugins/HideLegs
+          cp -r publish/* release/addons/counterstrikesharp/plugins/HideLegs/
+          cp README.md release/
+          cp LICENSE release/
+
+      - name: Archive release files
+        if: steps.check_tag.outputs.TAG_EXISTS == 'false'
+        run: |
+          cd release
+          zip -r ../HideLegs-${{ env.RELEASE_VERSION }}.zip .
+
+      - name: Create Release
+        if: steps.check_tag.outputs.TAG_EXISTS == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ env.RELEASE_VERSION }}" ./HideLegs-${{ env.RELEASE_VERSION }}.zip \
+            --title "HideLegs ${{ env.RELEASE_VERSION }}" \
+            --notes "Automated release for ${{ env.RELEASE_VERSION }}"
